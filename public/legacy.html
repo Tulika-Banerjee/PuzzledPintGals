@@ -383,7 +383,7 @@ html.embed-mode .lights,html.embed-mode .snow-globe,html.embed-mode .aurora-back
 html.embed-mode body{background:transparent!important}
 html.embed-mode .sn{display:none!important}
 html.embed-mode main{padding-top:0!important}
-html.embed-mode main>.hero{display:none!important}
+html.embed-mode main>.hero:not(.puzzle-hero){display:none!important}
 html.embed-mode main>.cane{display:none!important}
 html.embed-mode .home-shell>.hero{display:none!important}
 html.embed-mode .home-shell>.cane{display:none!important}
@@ -406,7 +406,7 @@ html.embed-mode .board-head{margin-top:10px!important}
    Types: wordle{word} connections{groups:[{name,words:[4]}]} crossword{grid,clues} semantle{ranked:[secret,...closest first]}
           scramble{answer,clue} riddle{q,a} hints{hints:[],answer}.  Optional title:'...' renames the puzzle. */
 const YEAR=2026;
-const TEST_MODE=true; /* true = every day unlocked for testing. Set to false before sharing with friends! */
+const TEST_MODE=false; /* Use a #friend-preview link to unlock every day and show the testing controls. */
 const FRIENDS={
   upasana:{name:'Upasana',present:'Your present: (describe it here)',photos:{
     3:'./memories/upasana/day-03.jpg',
@@ -1021,10 +1021,13 @@ function render(){
   const sk='adv:'+slug,isOpen=n=>TEST_MODE||prev||new Date()>=new Date(YEAR,11,n);
   const solved=load(sk),completed=solved.filter(n=>Number.isInteger(n)&&n>=1&&n<=24).length;
   app.append(adventHero(F.name));
-  if(TEST_MODE){
+  if(TEST_MODE||prev){
     const switchButton=h('button','switch-calendar','← Switch calendar');
     switchButton.type='button';
-    switchButton.onclick=()=>{location.hash='';render();};
+    switchButton.onclick=()=>{
+      if(window.parent!==window){parent.postMessage({type:'pint-home'},location.origin);return}
+      location.hash='';render();
+    };
     app.append(switchButton);
   }
   app.append(h('div','cane'));
@@ -1083,11 +1086,15 @@ function render(){
   const progress=h('div','progress-track'),fill=h('div','progress-fill');
   fill.style.width=(completed/24*100)+'%';progress.append(fill);app.append(progress);
   app.append(h('p','board-note','Solve to reveal a photo. Hover or tap to see the original date and puzzle answer when applicable. ♡'),msg);
-  if(TEST_MODE)msg.textContent='Preview mode: all days are unlocked for testing.';
+  if(TEST_MODE||prev)msg.textContent='Preview mode: all days are unlocked for testing.';
   function show(n){
     document.onkeydown=null;
     const d=dayData(F,n),box=h('div','card'),back=h('button','back','‹ Back to calendar');
-    back.onclick=render;app.textContent='';
+    const returnToCalendar=()=>{
+      render();
+      app.querySelectorAll('.door')[n-1]?.focus();
+    };
+    back.onclick=returnToCalendar;app.textContent='';
     const hero=h('div','hero puzzle-hero');
     hero.append(h('p','eyebrow','DECEMBER '+String(n).padStart(2,'0')),
                 h('h1','puzzle-title',d.title||NAMES[d.t]));
@@ -1106,21 +1113,25 @@ function render(){
       if(d.cap)pol.append(h('p',null,d.cap));box.append(pol);
       if(n===24)addChristmasFinale(box,F);
       const goBack=h('button','btn continue','See it on your calendar →');
-      goBack.onclick=render;box.append(goBack);
+      goBack.onclick=returnToCalendar;box.append(goBack);
     };
-    const fin=()=>{const s=load(sk);if(!s.includes(n))save(sk,[...s,n]);cinematicReveal(d,n,()=>{reward();confetti()})};
+    const fin=()=>{const s=load(sk);if(!s.includes(n))save(sk,[...s,n]);cinematicReveal(d,n,()=>{reward();if(!reducedMotion())confetti()})};
     if(load(sk).includes(n))reward();else {
       if(!P[d.t]){box.append(h('p','msg','Puzzle type not found: '+d.t));}
       else {P[d.t](box,d,fin);attachHints(box,d);animatePuzzleBoard(box);}
       if(TEST_MODE||prev){const test=h('button','btn ghost test-solve','✓ Solve this day (testing only)');test.onclick=fin;box.append(test)}
     }
     app.append(box);window.scrollTo(0,0);
+    const heading=hero.querySelector('h1');
+    heading.tabIndex=-1;
+    heading.focus({preventScroll:true});
+    if(window.parent!==window)parent.postMessage({type:'pint-scroll'},location.origin);
   }
 }
 addEventListener('hashchange',render);render();
 if(window.parent!==window){
   const report=()=>{
-    const h=Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    const h=Math.ceil(document.querySelector('#app').getBoundingClientRect().bottom+window.scrollY);
     parent.postMessage({type:'pint-resize',height:h},location.origin);
     parent.postMessage({type:'pint-progress'},location.origin);
   };
